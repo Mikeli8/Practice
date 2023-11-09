@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Client</title>
+</head>
+<body>
+    
+  <div>Доступные ключевые слова: ocean, mountain, sky</div>
+  <input id="keywordInput" type="text" placeholder="Введите ключевое слово" size="30">
+  <button onclick="getUrls()">Поиск</button>
+  <div id="urlsList"></div>
+  <button id="buttonDownloadedContent" onclick="getDownloadedContent()" hidden="true">Показать скаченный контент:</button>
+  <div id="DowloadContent"></div>
+  <div id="image"></div>
+
+  <script>
+    const socket = new WebSocket('ws://localhost:5020')
+    let DowloadedContentList = new Array()
+    let fileNameList = new Array()
+
+    const dowloadContent = document.getElementById('DowloadContent')
+    dowloadContent.innerHTML = ''
+    dowloadContent.hidden = true
+
+    const image = document.getElementById('image')
+    image.innerHTML = ''
+    image.hidden = true
+
+    socket.onopen = function() 
+    {
+      console.log('Подключение к серверу');
+    }
+
+    socket.onmessage = function(event) 
+    {
+      const urlsFromServer = JSON.parse(event.data)
+      const urlsList = document.getElementById('urlsList')
+      urlsList.innerHTML = ''
+
+      
+
+      if (urlsFromServer === "empty") 
+      {
+        const link = document.createElement('div')
+       
+        link.textContent = `URL адрес по ключевому слову ${document.getElementById('keywordInput').value} не найден`
+        urlsList.appendChild(link)
+        console.log(link.textContent)
+      } 
+      else 
+      {
+        urlsFromServer.forEach((url) => 
+        {
+          const container = document.createElement('div')
+          container.style.marginBottom = '15px'
+
+          const link = document.createElement('a')
+          link.setAttribute('target', '_blank')
+          link.href = url
+          link.innerHTML = url
+          container.appendChild(link)
+
+          const tab = document.createElement('tab')
+          tab.innerText = " "
+          container.appendChild(tab)
+
+          const downloadButton = document.createElement('button')
+          downloadButton.innerHTML = 'Скачать'
+          container.appendChild(downloadButton)
+
+          const newLine = document.createElement('newLine')
+          newLine.innerText = "\n"
+          container.appendChild(newLine)
+
+          const progressBar = document.createElement('progress')
+          progressBar.value = 0
+          progressBar.max = 100
+          progressBar.hidden = true
+          progressBar.setAttribute("style", "background-color:green")
+          container.appendChild(progressBar)
+          
+          urlsList.appendChild(container)
+
+          downloadButton.addEventListener('click', function() 
+          {
+            downloadContent(url, progressBar, dowloadContent)
+          });
+
+          const butDownloadedContent = document.getElementById('buttonDownloadedContent')
+          butDownloadedContent.hidden = false
+        });
+      }
+    };
+
+    socket.onclose = function(event) 
+    {
+      console.log('Отсоединение от сервера')
+    };
+
+    function getUrls() 
+    {
+      const keyword = document.getElementById('keywordInput').value
+      socket.send(keyword);
+    }
+
+    function getDownloadedContent() 
+    {
+      dowloadContent.innerHTML = ''
+      dowloadContent.hidden = false
+
+      DowloadedContentList.forEach((blobAndFileName) => 
+      {
+          var container = document.createElement('div')
+          container.style.marginBottom = '15px'
+          container.style.marginTop = '15px'
+          const link = document.createElement('a')
+          link.text = blobAndFileName.filename
+          container.appendChild(link)
+
+          const tab = document.createElement('tab')
+          tab.innerText = " "
+          container.appendChild(tab)
+
+          const ViewButton = document.createElement('button')
+          ViewButton.innerHTML = 'Вывести на экран'
+          container.appendChild(ViewButton)
+          dowloadContent.appendChild(container)
+
+          ViewButton.addEventListener('click', function() 
+          {
+            ViewImage(blobAndFileName.blob)
+          });
+      })
+    }
+
+    function ViewImage(blob) 
+    {
+      image.innerHTML = ''
+      image.hidden = false
+      var m=document.createElement("img");
+      m.setAttribute('src', URL.createObjectURL(blob));
+      image.appendChild(m)
+    }
+
+    function downloadContent(url, progressBar, dowloadContent) 
+    {
+        progressBar.hidden = false
+        const XmlHttpRequest = new XMLHttpRequest()
+        XmlHttpRequest.open('GET', url, true)
+        XmlHttpRequest.responseType = 'blob'
+
+       
+
+        XmlHttpRequest.onloadstart = function() 
+        {
+            console.log('Download started')
+        };
+
+        XmlHttpRequest.onprogress = function(event) 
+        {
+            if (event.lengthComputable) 
+            {
+              const progress = (event.loaded / event.total) * 100
+              progressBar.value = progress
+            }
+        };
+
+        XmlHttpRequest.onload = function() 
+        {
+            if (XmlHttpRequest.status === 200) 
+            {
+              var filePath = url.split('/');
+              var filename = filePath[filePath.length - 1];
+              var blob = new Blob([XmlHttpRequest.response])
+
+              var link = document.createElement('a')
+              link.href = URL.createObjectURL(blob)
+              link.download = filename ? filename : 'image.jpeg'
+              link.click()
+              fileNameList.push(filename)
+              DowloadedContentList.push({filename, blob})
+              URL.revokeObjectURL(link.href)
+              progressBar.value = 100
+            } 
+            else 
+            {
+              console.log(`При загрузке произошла ошибка: ${XmlHttpRequest.status}`)
+            }
+        };
+        XmlHttpRequest.send();
+    }
+  </script>
+</body>
+</html>
